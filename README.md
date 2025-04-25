@@ -65,6 +65,9 @@ python manage.py createsuperuser --email admin@example.com
 As we don't have a gardener running yet, I've created a very small server that returns 200 on a request instead of mocking anything on my side, you just need to go to the folder and run the following in a separate terminal
 
 ```bash
+cd gardener-mock
+pyenv shell 3.11.8
+python3 -m venv venv
 pip install fastapi uvicorn
 uvicorn gardener_mock:app --reload --host 0.0.0.0 --port 8001
 ```
