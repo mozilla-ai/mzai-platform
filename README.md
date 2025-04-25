@@ -5,22 +5,11 @@ Workflows are defined by a prompt, materialized as YAML, stored on S3, then exec
 
 ---
 
-## 🧰 Tech Stack
-
-- **Backend**: Django 4.x, Django REST Framework  
-- **Auth**: DRF TokenAuthentication (`djangorestframework-authtoken`)  
-- **Storage**: AWS S3 via `django-storages[boto3]`  
-- **HTTP**: `requests` for calling external Gardener & KFP REST API  
-- **Kubeflow**: `kfp` Python SDK v2 against a local Kind cluster  
-- **Schema & Docs**: drf-spectacular + Swagger UI  
-- **Env**: `python-dotenv` for local `.env` files  
-- **DB**: any Django-supported (SQLite for dev)  
-
----
-
 ## 🚀 Quickstart
 
 ### 1. Clone & Virtualenv
+> [!NOTE]
+> Ensure you run Python 3.11.8
 
 ```bash
 git clone https://github.com/your-org/mzai-platform-api.git
@@ -61,7 +50,7 @@ KFP_AUTH_TOKEN=                         # if your KFP has no auth
 # External Gardener
 GARDENER_URL=http://localhost:8001      # after running the mock server
 
-
+```
 ### 4. Database Setup
 Run the migrations and add a superuser to your database so you can run things inside the app
 
