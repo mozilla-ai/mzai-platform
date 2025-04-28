@@ -86,7 +86,7 @@ kubectl port-forward svc/ml-pipeline-ui    8080:80
 ### 6. Start Django
 
 ```bash
-python manage.py runserver
+docker-compose up
 ```
 
 Once you start Django, you can login into the admin panel in
