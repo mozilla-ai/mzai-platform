@@ -3,7 +3,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from django.utils.translation import gettext_lazy as _
-from .models import Org, CustomUser, Workflow, Run
+from core.models import Org, CustomUser, Workflow, Run
 
 @admin.register(Org)
 class OrgAdmin(admin.ModelAdmin):

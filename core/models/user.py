@@ -1,18 +1,9 @@
-# core/models.py
-import uuid
 from django.db import models
-from django.contrib.auth.models import AbstractUser, Group, Permission
-from django.contrib.auth.base_user import BaseUserManager
+import uuid
+from django.contrib.auth.models import AbstractUser, BaseUserManager
+from django.contrib.auth.models import Group, Permission
 from django.utils.translation import gettext_lazy as _
-
-
-class Org(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=255)
-
-    def __str__(self):
-        return self.name
-
+from .org import Org
 
 class CustomUserManager(BaseUserManager):
     """
@@ -116,59 +107,3 @@ class CustomUser(AbstractUser):
 
     def __str__(self):
         return self.display_name or self.email
-
-
-class Workflow(models.Model):
-    class Status(models.TextChoices):
-        PENDING = 'PENDING', 'Pending'
-        RUNNING = 'RUNNING', 'Running'
-        FAILED = 'FAILED', 'Failed'
-        READY = 'READY', 'Ready'
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    org = models.ForeignKey(
-        Org,
-        on_delete=models.CASCADE,
-        related_name='workflows'
-    )
-    name = models.CharField(max_length=255)
-    prompt = models.TextField()
-    yaml_s3_key = models.CharField(max_length=1024, blank=True)
-    status = models.CharField(
-        max_length=10,
-        choices=Status.choices,
-        default=Status.PENDING
-    )
-    webhook_uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"{self.name} ({self.status})"
-
-
-class Run(models.Model):
-    class Status(models.TextChoices):
-        PENDING = 'PENDING', 'Pending'
-        RUNNING = 'RUNNING', 'Running'
-        SUCCEEDED = 'SUCCEEDED', 'Succeeded'
-        FAILED = 'FAILED', 'Failed'
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    workflow = models.ForeignKey(
-        Workflow,
-        on_delete=models.CASCADE,
-        related_name='runs'
-    )
-    kfp_run_id = models.CharField(max_length=255, blank=True)
-    status = models.CharField(
-        max_length=10,
-        choices=Status.choices,
-        default=Status.PENDING
-    )
-    started_at = models.DateTimeField(null=True, blank=True)
-    finished_at = models.DateTimeField(null=True, blank=True)
-    yaml_snapshot_s3_key = models.CharField(max_length=1024, blank=True)
-
-    def __str__(self):
-        return f"Run {self.id} - {self.status}"

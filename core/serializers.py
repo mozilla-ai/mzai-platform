@@ -1,7 +1,7 @@
 # core/serializers.py
 
 from rest_framework import serializers
-from .models import Workflow, Run
+from core.models import Workflow, Run
 
 class WorkflowSerializer(serializers.ModelSerializer):
     # only accept `prompt` on input, never return it

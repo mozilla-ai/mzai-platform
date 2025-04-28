@@ -17,7 +17,7 @@ from rest_framework.decorators import action
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 from drf_spectacular.types import OpenApiTypes
 
-from .models import Workflow, Run
+from core.models import Workflow, Run
 from .serializers import WorkflowSerializer, RunSerializer
 from .permissions import IsActivePermission
 from .mixins import OrgScopedMixin
