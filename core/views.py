@@ -27,6 +27,9 @@ import tempfile
 from kfp import Client
 import logging
 
+from rest_framework_simplejwt.views import TokenObtainPairView
+from .serializers import OrgTokenObtainPairSerializer
+
 logger = logging.getLogger(__name__)
 
 
@@ -40,51 +43,6 @@ class LoginSerializer(serializers.Serializer):
 
 class TokenSerializer(serializers.Serializer):
     token = serializers.CharField()
-
-
-# -----------------------------------------------------------------------------
-# Login / Logout
-# -----------------------------------------------------------------------------
-
-@extend_schema(
-    request=LoginSerializer,
-    responses={
-        200: TokenSerializer,
-        400: OpenApiResponse(description="Email and password required"),
-        401: OpenApiResponse(description="Invalid credentials"),
-    }
-)
-class LoginView(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request, *args, **kwargs):
-        email = request.data.get('email')
-        password = request.data.get('password')
-        if not email or not password:
-            return Response(
-                {'detail': 'Please provide email and password.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        user = authenticate(request, email=email, password=password)
-        if not user:
-            return Response(
-                {'detail': 'Invalid credentials.'},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
-        token, _ = Token.objects.get_or_create(user=user)
-        return Response({'token': token.key})
-
-
-@extend_schema(
-    responses={204: OpenApiResponse(description="Logout successful")}
-)
-class LogoutView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, *args, **kwargs):
-        Token.objects.filter(user=request.user).delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
 
 # -----------------------------------------------------------------------------
 # Workflow ViewSet
@@ -293,3 +251,7 @@ class RunViewSet(
         if user.org is not None:
             qs = qs.filter(workflow__org=user.org)
         return qs
+
+
+class OrgTokenObtainPairView(TokenObtainPairView):
+    serializer_class = OrgTokenObtainPairSerializer

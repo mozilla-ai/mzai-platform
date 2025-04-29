@@ -2,6 +2,7 @@
 
 from rest_framework import serializers
 from core.models import Workflow, Run
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 class WorkflowSerializer(serializers.ModelSerializer):
     # only accept `prompt` on input, never return it
@@ -45,3 +46,16 @@ class RunSerializer(serializers.ModelSerializer):
             'yaml_snapshot_s3_key',
         ]
         read_only_fields = fields
+
+class OrgTokenObtainPairSerializer(TokenObtainPairSerializer):
+    @classmethod
+    def get_token(cls, user):
+        # Get the standard token (refresh + access)
+        token = super().get_token(user)
+
+        # Add custom claims
+        # Make sure your CustomUser has an .org relation
+        token['org_id'] = str(user.org.id)       # e.g. UUIDField
+        token['org_name'] = user.org.name        # optional human-readable
+
+        return token

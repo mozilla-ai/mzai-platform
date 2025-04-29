@@ -2,20 +2,25 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    LoginView,
-    LogoutView,
     WorkflowViewSet,
     WorkflowWebhookView,
     RunViewSet,
-)
+    OrgTokenObtainPairView,
 
+)
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+    TokenVerifyView,
+)
 router = DefaultRouter()
 router.register(r'workflows', WorkflowViewSet, basename='workflows')
 
 urlpatterns = [
-    # auth
-    path('login/',  LoginView.as_view(),  name='login'),
-    path('logout/', LogoutView.as_view(), name='logout'),
+    
+    path('api/token/', OrgTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
 
     # webhook (must come before the router)
     path(
