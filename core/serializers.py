@@ -53,12 +53,11 @@ class OrgTokenObtainPairSerializer(TokenObtainPairSerializer):
         # Get the standard token (refresh + access)
         token = super().get_token(user)
 
-        # Handle cases where user might not have an org (like superusers)
         if hasattr(user, 'org') and user.org:
             token['org_id'] = str(user.org.id)
             token['org_name'] = user.org.name
         else:
-            # Default values for users without org (like superadmins)
+            # Default values for users without org (like superadmins) otherwise trying to access user.org throws
             token['org_id'] = None
             token['org_name'] = None
 
