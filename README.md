@@ -60,19 +60,12 @@ python manage.py createsuperuser --email admin@example.com
 ```
 
 
-### 5. External deps
+### 5. External Deps
 
-As we don't have a gardener running yet, I've created a very small server that returns 200 on a request instead of mocking anything on my side, you just need to go to the folder and run the following in a separate terminal
 
-```bash
-cd gardener-mock
-pyenv shell 3.11.8
-python3 -m venv venv
-pip install fastapi uvicorn
-uvicorn gardener_mock:app --reload --host 0.0.0.0 --port 8001
-```
+You need Kubeflow Pipelines and Gardener working. For gardener, please relate to https://github.com/mozilla-ai/workflow-composer.
 
-I've got KFP running locally in kind , and I've done the following port forward:
+For KFP, I've got it running locally in kind , and I've done the following port forward:
 
 ```bash
 # API
@@ -90,8 +83,7 @@ docker-compose up
 ```
 
 Once you start Django, you can login into the admin panel in
-[http://localhost:8000/admin](http://localhost:8000/admin) and log in with the superuser you created before. You need to add an Org to the superuser (as this user is an admin user and it's not suppose to run workflows). You can create an org and add things manually in the admin panel.
-
+[http://localhost:8000/admin](http://localhost:8000/admin) and log in with the superuser you created before. You need to add an [Org](http://localhost:8000/admin/core/org/) to the superuser (as this user is an admin user and it's not suppose to run workflows). After that, you need to go to the users page and add the selected [user](http://localhost:8000/admin/core/customuser/) to the organization
 
 ## API Documentation
 
