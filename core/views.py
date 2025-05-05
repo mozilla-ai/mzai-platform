@@ -26,6 +26,7 @@ import requests
 import tempfile
 from kfp import Client
 import logging
+import yaml
 
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializers import OrgTokenObtainPairSerializer
@@ -64,12 +65,13 @@ class WorkflowViewSet(
 
     @extend_schema(
         request=WorkflowSerializer,
-        responses={202: OpenApiResponse(description="Returns new workflow ID")}
+        responses={200: OpenApiResponse(description="Returns parsed workflow JSON")}
     )
     @action(detail=False, methods=['post'], url_path='generate')
     def generate(self, request):
         """
-        Create a Workflow and immediately POST to the Gardener API.
+        Create a Workflow, synchronously call Gardener API to get YAML,
+        save it to storage, parse to JSON, and return JSON to client.
         """
         if request.user.org is None:
             return Response(
@@ -80,38 +82,114 @@ class WorkflowViewSet(
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        # Create workflow record in PENDING state
         workflow = serializer.save(
             org=request.user.org,
             status=Workflow.Status.PENDING
         )
 
         payload = {
-            "prompt": workflow.prompt,
-            "webhook_url": (
-                f"{settings.CALLBACK_BASE_URL}/api/v1/"
-                f"workflows/webhook/{workflow.webhook_uuid}/"
-            )
+            "prompt": workflow.prompt
+            # Keep webhook_url for future use
+            #"webhook_url": (
+            #    f"{settings.CALLBACK_BASE_URL}/api/v1/"
+            #    f"workflows/webhook/{workflow.webhook_uuid}/"
+            #)
         }
 
         try:
+            # Call Gardener synchronously
             resp = requests.post(
-                f"{settings.GARDENER_URL}/generate",
-                json=payload,
-                timeout=10
+                f"{settings.GARDENER_URL}",
+                params=payload,
+                timeout=30
             )
             resp.raise_for_status()
-        except requests.RequestException:
+
+            # Retrieve YAML from response body
+            yaml_str = resp.text
+
+            # Save YAML to storage (e.g., S3)
+            key = f'workflows/{workflow.id}.yaml'
+            default_storage.save(key, ContentFile(yaml_str.encode('utf-8')))
+
+            # Update workflow status and S3 key
+            workflow.yaml_s3_key = key
+            workflow.status = Workflow.Status.READY
+            workflow.save(update_fields=['yaml_s3_key', 'status'])
+
+            # Parse YAML to Python dict
+            data = yaml.safe_load(yaml_str)
+
+                        # Transform the raw pipeline YAML dict into the desired JSON schema
+            spec = yaml.safe_load(yaml_str)
+            result = {
+                'id': workflow.webhook_uuid,
+                'description': spec.get('pipelineInfo', {}).get('description', ''),
+                'steps': [],
+                'inputs': []
+            }
+# Build steps array based on the root DAG task ordering
+            tasks = spec.get('root', {}).get('dag', {}).get('tasks', {})
+            components = spec.get('components', {})
+            # Retain the defined inputDefinitions order for inputs
+            for task_name, task_def in tasks.items():
+                comp_ref = task_def.get('componentRef', {}).get('name')
+                comp = components.get(comp_ref, {})
+                step = {
+                    'description': comp.get('inputDefinitions', {}).get('parameters', {}).get('description', ''),
+                    'inputs': [],
+                    'output_name': list(comp.get('outputDefinitions', {}).get('artifacts', {}).keys())[0] if comp.get('outputDefinitions', {}).get('artifacts') else None
+                }
+                # Map input parameters
+                for in_type, inputs in task_def.get('inputs', {}).items():
+                    for key, val in inputs.items():
+                        # parameter or artifact
+                        step['inputs'].append({
+                            'name': key,
+                            'type': 'string',
+                            'description': ''
+                        })
+                result['steps'].append(step)
+
+                                    # Build inputs directly from YAML definitions
+            spec_inputs = spec.get('inputDefinitions', {}).get('parameters', {})
+            for name, param in spec_inputs.items():
+                result['inputs'].append({
+                    'name': name,
+                    'type': param.get('parameterType', 'STRING').lower(),
+                    'description': param.get('description', ''),
+                    'required': not param.get('isOptional', False)
+                })
+            # Add custom output_path field
+            result['inputs'].append({
+                'name': 'output_path',
+                'type': 'string',
+                'description': 'The path to save the generated podcast',
+                'required': True
+            })
+
+            data = result
+
+        except requests.RequestException as e:
+            # Mark as failed on HTTP or connection errors
             workflow.status = Workflow.Status.FAILED
-            workflow.save(update_fields=["status"])
+            workflow.save(update_fields=['status'])
             return Response(
-                {"detail": "Failed to start generation job."},
+                {'detail': 'Failed to generate workflow: %s' % e},
                 status=status.HTTP_502_BAD_GATEWAY
             )
+        except Exception as e:
+            # Catch YAML/storage/parsing errors
+            workflow.status = Workflow.Status.FAILED
+            workflow.save(update_fields=['status'])
+            return Response(
+                {'detail': 'Error processing workflow output: %s' % e},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-        workflow.status = Workflow.Status.RUNNING
-        workflow.save(update_fields=["status"])
-
-        return Response({'id': workflow.id}, status=status.HTTP_202_ACCEPTED)
+        # Return parsed JSON to UI
+        return Response(data, status=status.HTTP_200_OK)
 
 
     @extend_schema(
