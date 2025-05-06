@@ -33,6 +33,52 @@ from .serializers import OrgTokenObtainPairSerializer
 
 logger = logging.getLogger(__name__)
 
+# -----------------------------------------------------------------------------
+# Temporary component descriptions and input metadata this will be removed after POC
+# -----------------------------------------------------------------------------
+COMPONENT_DESCRIPTIONS = {
+    'comp-downloader': 'Downloads the source document from the provided URL.',
+    'comp-transformer': 'Transforms the downloaded document into a standardized format (Markdown).',
+    'comp-scriptwriter': 'Generates a podcast script from the processed document.',
+    'comp-performer': 'Converts the podcast script into speech/audio using the specified voice profiles.',
+}
+
+def get_component_description(component_name):
+    """
+    Return a human-friendly description for the given component.
+    Falls back to the raw component name if no description is found.
+    """
+    return COMPONENT_DESCRIPTIONS.get(component_name, component_name)
+
+INPUT_METADATA = {
+    'comp-downloader': {
+        'document_url': {'required': True},
+    },
+    'comp-transformer': {
+        'file_type': {'default_value': '.html'},
+    },
+    'comp-scriptwriter': {
+        'cohost_name': {'default_value': 'Michael'},
+        'host_name': {'default_value': 'Sarah'},
+        'model': {'default_value': 'bartowski/Qwen2.5-7B-Instruct-GGUF/Qwen2.5-7B-Instruct-Q8_0.gguf'},
+    },
+    'comp-performer': {
+        'audio_format': {'default_value': 'WAV'},
+        'cohost_voice_profile': {'default_value': 'am_michael'},
+        'host_voice_profile': {'default_value': 'af_sarah'},
+        'model': {'default_value': 'hexgrad/Kokoro-82M'},
+    },
+}
+
+def get_input_metadata(component_name, input_name):
+    """
+    Return a dict containing either 'required': True or
+    'default_value': <value> for the given component input.
+    """
+    meta = INPUT_METADATA.get(component_name, {}).get(input_name, {})
+    if 'default_value' in meta:
+        return {'default_value': meta['default_value']}
+    return {'required': True}
 
 # -----------------------------------------------------------------------------
 # Auth Serializers (for Swagger)
@@ -88,25 +134,16 @@ class WorkflowViewSet(
             status=Workflow.Status.PENDING
         )
 
-        payload = {
-            "prompt": workflow.prompt
-            # Keep webhook_url for future use
-            #"webhook_url": (
-            #    f"{settings.CALLBACK_BASE_URL}/api/v1/"
-            #    f"workflows/webhook/{workflow.webhook_uuid}/"
-            #)
-        }
+        payload = {"prompt": workflow.prompt}
 
         try:
             # Call Gardener synchronously
             resp = requests.post(
-                f"{settings.GARDENER_URL}",
+                settings.GARDENER_URL,
                 params=payload,
                 timeout=30
             )
             resp.raise_for_status()
-
-            # Retrieve YAML from response body
             yaml_str = resp.text
 
             # Save YAML to storage (e.g., S3)
@@ -118,77 +155,70 @@ class WorkflowViewSet(
             workflow.status = Workflow.Status.READY
             workflow.save(update_fields=['yaml_s3_key', 'status'])
 
-            # Parse YAML to Python dict
-            data = yaml.safe_load(yaml_str)
-
-                        # Transform the raw pipeline YAML dict into the desired JSON schema
+            # Parse the YAML into a dict
             spec = yaml.safe_load(yaml_str)
+
+            # Build executorLabel → image mapping
+            executors = spec.get('deploymentSpec', {}).get('executors', {})
+            executor_images = {
+                label: exec_def.get('container', {}).get('image')
+                for label, exec_def in executors.items()
+            }
+
+            # Transform the raw pipeline YAML dict into the desired JSON schema
             result = {
                 'id': workflow.webhook_uuid,
                 'description': spec.get('pipelineInfo', {}).get('description', ''),
-                'steps': [],
-                'inputs': []
+                'steps': []
             }
-# Build steps array based on the root DAG task ordering
             tasks = spec.get('root', {}).get('dag', {}).get('tasks', {})
             components = spec.get('components', {})
-            # Retain the defined inputDefinitions order for inputs
+
             for task_name, task_def in tasks.items():
                 comp_ref = task_def.get('componentRef', {}).get('name')
-                comp = components.get(comp_ref, {})
-                step = {
-                    'description': comp.get('inputDefinitions', {}).get('parameters', {}).get('description', ''),
-                    'inputs': [],
-                    'output_name': list(comp.get('outputDefinitions', {}).get('artifacts', {}).keys())[0] if comp.get('outputDefinitions', {}).get('artifacts') else None
-                }
-                # Map input parameters
-                for in_type, inputs in task_def.get('inputs', {}).items():
-                    for key, val in inputs.items():
-                        # parameter or artifact
-                        step['inputs'].append({
-                            'name': key,
-                            'type': 'string',
-                            'description': ''
-                        })
-                result['steps'].append(step)
 
-                                    # Build inputs directly from YAML definitions
-            spec_inputs = spec.get('inputDefinitions', {}).get('parameters', {})
-            for name, param in spec_inputs.items():
-                result['inputs'].append({
-                    'name': name,
-                    'type': param.get('parameterType', 'STRING').lower(),
-                    'description': param.get('description', ''),
-                    'required': not param.get('isOptional', False)
-                })
-            # Add custom output_path field
-            result['inputs'].append({
-                'name': 'output_path',
-                'type': 'string',
-                'description': 'The path to save the generated podcast',
-                'required': True
-            })
+                # Lookup executor label & image
+                executor_label = components.get(comp_ref, {}).get('executorLabel')
+                image = executor_images.get(executor_label)
+
+                step = {
+                    'id': task_name,
+                    'description': get_component_description(comp_ref),
+                    'inputs': [],
+                    'image': image
+                }
+
+                # Map each input, adding required/default metadata
+                # only show parameters, not artifacts
+                for key in task_def.get('inputs', {}).get('parameters', {}):
+                    meta = get_input_metadata(comp_ref, key)
+                    inp = {
+                        'name': key,
+                        'type': 'string',
+                        **meta
+                    }
+                    step['inputs'].append(inp)
+
+
+                result['steps'].append(step)
 
             data = result
 
         except requests.RequestException as e:
-            # Mark as failed on HTTP or connection errors
             workflow.status = Workflow.Status.FAILED
             workflow.save(update_fields=['status'])
             return Response(
-                {'detail': 'Failed to generate workflow: %s' % e},
+                {'detail': f'Failed to generate workflow: {e}'},
                 status=status.HTTP_502_BAD_GATEWAY
             )
         except Exception as e:
-            # Catch YAML/storage/parsing errors
             workflow.status = Workflow.Status.FAILED
             workflow.save(update_fields=['status'])
             return Response(
-                {'detail': 'Error processing workflow output: %s' % e},
+                {'detail': f'Error processing workflow output: {e}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-        # Return parsed JSON to UI
         return Response(data, status=status.HTTP_200_OK)
 
 
