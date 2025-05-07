@@ -31,8 +31,7 @@ Copy `.env.example` into `.env` and fill in
 
 ```dotenv
 # Django & DB
-DATABASE_URL=sqlite:///db.sqlite3  
-SECRET_KEY=<your-django-secret-just-create-a-random-UUID>  
+DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}SECRET_KEY=<your-django-secret-just-create-a-random-UUID>  
 DEBUG=True  
 
 # AWS S3
@@ -50,16 +49,8 @@ KFP_AUTH_TOKEN=                         # if your KFP has no auth
 WORKFLOW_COMPOSER=http://localhost:8085/api/v1/workflows/    # after running the external server
 
 ```
-### 4. Database Setup
-Run the migrations and add a superuser to your database so you can run things inside the app
 
-```bash
-python manage.py migrate
-python manage.py createsuperuser --email admin@example.com
-```
-
-
-### 5. External Deps
+### 4. External Deps
 
 
 You need Kubeflow Pipelines and Workflow Composer working. For Workflow Composer, please relate to https://github.com/mozilla-ai/workflow-composer.
@@ -86,14 +77,19 @@ kubectl port-forward -n myNamespace svc/ml-pipeline-ui    8080:80
 ```
 
 
-### 6. Start Django
+### 5. Start Django
 
 ```bash
-docker-compose up
+docker-compose up -d
 ```
-
+# Interactive superuser prompt
+```bash
+docker-compose exec web python manage.py createsuperuser
+```
 Once you start Django, you can login into the admin panel in
 [http://localhost:8000/admin](http://localhost:8000/admin) and log in with the superuser you created before. You need to add an [Org](http://localhost:8000/admin/core/org/) to the superuser (as this user is an admin user and it's not suppose to run workflows). After that, you need to go to the users page and add the selected [user](http://localhost:8000/admin/core/customuser/) to the organization
+
+
 
 ## API Documentation
 
