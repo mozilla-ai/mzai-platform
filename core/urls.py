@@ -18,9 +18,9 @@ router.register(r'workflows', WorkflowViewSet, basename='workflows')
 
 urlpatterns = [
 
-    path('api/token/', OrgTokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('api/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
+    path('token/', OrgTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('token/verify/', TokenVerifyView.as_view(), name='token_verify'),
 
     # webhook (must come before the router)
     path(
