@@ -1,6 +1,6 @@
 # MZAI Platform API (v1 POC)
 
-A proof-of-concept Django REST API for generating and running Kubeflow pipelines via an external “Gardener” service.  
+A proof-of-concept Django REST API for generating and running Kubeflow pipelines via an external (Workflow Composer)[https://github.com/mozilla-ai/workflow-composer] service.  
 Workflows are defined by a prompt, materialized as YAML, stored on S3, then executed on Kubeflow Pipelines.  
 
 ---
@@ -40,15 +40,14 @@ AWS_ACCESS_KEY_ID=<…>
 AWS_SECRET_ACCESS_KEY=<…>
 AWS_STORAGE_BUCKET_NAME=<your-bucket-name>
 
-# Gardener callback - Where the gardener will post the YAML for the workflow. by default localhost:8000
-CALLBACK_BASE_URL=http://localhost:8000
+
 
 # Kubeflow Pipelines
 KFP_API_URL=http://127.0.0.1:8888       # after port-forward svc/ml-pipeline
 KFP_AUTH_TOKEN=                         # if your KFP has no auth
 
-# External Gardener
-GARDENER_URL=http://localhost:8001      # after running the mock server
+# External Workflow Composer URL
+WORKFLOW_COMPOSER=http://localhost:8085/api/v1/workflows/    # after running the external server
 
 ```
 ### 4. Database Setup
@@ -63,7 +62,7 @@ python manage.py createsuperuser --email admin@example.com
 ### 5. External Deps
 
 
-You need Kubeflow Pipelines and Gardener working. For gardener, please relate to https://github.com/mozilla-ai/workflow-composer.
+You need Kubeflow Pipelines and Workflow Composer working. For Workflow Composer, please relate to https://github.com/mozilla-ai/workflow-composer.
 
 For KFP, I've got it running locally in kind , and I've done the following port forward:
 

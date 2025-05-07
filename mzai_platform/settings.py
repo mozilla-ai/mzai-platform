@@ -177,7 +177,7 @@ AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
 # External Service Tokens
 KFP_API_URL     = os.getenv('KFP_API_URL')
 KFP_AUTH_TOKEN  = os.getenv('KFP_AUTH_TOKEN')
-GARDENER_URL    = os.getenv('GARDENER_URL')
+WORKFLOW_COMPOSER_URL    = os.getenv('WORKFLOW_COMPOSER_URL')
 CALLBACK_BASE_URL = os.getenv('CALLBACK_BASE_URL')
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
