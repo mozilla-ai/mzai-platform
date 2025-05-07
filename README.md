@@ -12,7 +12,7 @@ Workflows are defined by a prompt, materialized as YAML, stored on S3, then exec
 > Ensure you run Python 3.11.8
 
 ```bash
-git clone https://github.com/your-org/mzai-platform-api.git
+git clone https://github.com/mozilla-ai/mzai-platform-api.git
 cd mzai-platform-api
 pyenv shell 3.11.8
 python3 -m venv venv
@@ -64,7 +64,7 @@ python manage.py createsuperuser --email admin@example.com
 
 You need Kubeflow Pipelines and Workflow Composer working. For Workflow Composer, please relate to https://github.com/mozilla-ai/workflow-composer.
 
-For KFP, I've got it running locally in kind , and I've done the following port forward:
+For KFP, I've got it running locally in kind (but also works with minikube), and I've done the following port forward:
 
 ```bash
 # API
@@ -72,6 +72,17 @@ kubectl port-forward svc/ml-pipeline       8888:8888
 
 # UI (in another terminal)
 kubectl port-forward svc/ml-pipeline-ui    8080:80
+```
+
+Note: if these commands return the error "No resources found in the default namespace": 
+
+```bash
+# check which namespace may have been used, let's say it's myNamespace
+kubectl get deploy -A 
+
+# Run the previous commands under that namespace
+kubectl port-forward -n myNamespace svc/ml-pipeline       8888:8888
+kubectl port-forward -n myNamespace svc/ml-pipeline-ui    8080:80
 ```
 
 
