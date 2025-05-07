@@ -116,7 +116,7 @@ class WorkflowViewSet(
     @action(detail=False, methods=['post'], url_path='generate')
     def generate(self, request):
         """
-        Create a Workflow, synchronously call Gardener API to get YAML,
+        Create a Workflow, synchronously call Workflow Composer API to get YAML,
         save it to storage, parse to JSON, and return JSON to client.
         """
         if request.user.org is None:
@@ -137,9 +137,9 @@ class WorkflowViewSet(
         payload = {"prompt": workflow.prompt}
 
         try:
-            # Call Gardener synchronously
+            # Call Workflow Composer synchronously
             resp = requests.post(
-                settings.GARDENER_URL,
+                settings.WORKFLOW_COMPOSER_URL,
                 params=payload,
                 timeout=30
             )
@@ -301,7 +301,7 @@ class WorkflowViewSet(
 
 
 # -----------------------------------------------------------------------------
-# Gardener Webhook
+# Workflow Composer Webhook - currently not used 
 # -----------------------------------------------------------------------------
 
 class WorkflowWebhookView(APIView):
