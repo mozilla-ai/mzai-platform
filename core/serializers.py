@@ -29,7 +29,7 @@ class WorkflowSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
-        
+
 class RunSerializer(serializers.ModelSerializer):
     # If you want the workflow ID in the output:
     workflow_id = serializers.UUIDField(source='workflow.id', read_only=True)
@@ -53,9 +53,12 @@ class OrgTokenObtainPairSerializer(TokenObtainPairSerializer):
         # Get the standard token (refresh + access)
         token = super().get_token(user)
 
-        # Add custom claims
-        # Make sure your CustomUser has an .org relation
-        token['org_id'] = str(user.org.id)       # e.g. UUIDField
-        token['org_name'] = user.org.name        # optional human-readable
+        if hasattr(user, 'org') and user.org:
+            token['org_id'] = str(user.org.id)
+            token['org_name'] = user.org.name
+        else:
+            # Default values for users without org (like superadmins) otherwise trying to access user.org throws
+            token['org_id'] = None
+            token['org_name'] = None
 
         return token
