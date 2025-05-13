@@ -147,7 +147,7 @@ class WorkflowViewSet(
             yaml_str = resp.text
 
             # Save YAML to storage (e.g., S3)
-            key = f'workflows/{workflow.id}.yaml'
+            key = f'mzai-platform-workflows/{workflow.id}.yaml'
             default_storage.save(key, ContentFile(yaml_str.encode('utf-8')))
 
             # Update workflow status and S3 key
@@ -167,7 +167,7 @@ class WorkflowViewSet(
 
             # Transform the raw pipeline YAML dict into the desired JSON schema
             result = {
-                'id': workflow.webhook_uuid,
+                'workflowId': workflow.id, #TODO change to UUID and add result to the run when it's completed. 
                 'description': spec.get('pipelineInfo', {}).get('description', ''),
                 'steps': []
             }
@@ -182,7 +182,7 @@ class WorkflowViewSet(
                 image = executor_images.get(executor_label)
 
                 step = {
-                    'id': task_name,
+                    'id': task_name, 
                     'description': get_component_description(comp_ref),
                     'inputs': [],
                     'image': image
@@ -263,7 +263,7 @@ class WorkflowViewSet(
             tmp_path = tmp.name
 
         pipeline_params = request.data or {}
-
+        logger.exception(f" submitting run with this pipeline params {pipeline_params}")
         try:
             client = Client(
                 host=settings.KFP_API_URL,
