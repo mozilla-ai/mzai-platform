@@ -23,6 +23,7 @@ class Run(models.Model):
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
     yaml_snapshot_s3_key = models.CharField(max_length=1024, blank=True)
+    run_url = models.CharField(max_length=1024, blank=True)
 
     def __str__(self):
         return f"Run {self.id} - {self.status}"
