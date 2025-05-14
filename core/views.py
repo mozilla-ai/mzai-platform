@@ -286,7 +286,9 @@ class WorkflowViewSet(
             run.kfp_run_id = getattr(res, 'id', None) or getattr(res, 'run_id', None)
             run.status     = Run.Status.RUNNING
             run.started_at = timezone.now()
-            run.save(update_fields=['kfp_run_id','status','started_at'])
+            base = settings.KFP_API_URL.rstrip('/')
+            run.run_url = f"{base}/#/runs/details/{run.kfp_run_id}"
+            run.save(update_fields=['kfp_run_id','status','started_at','run_url'])
 
         except Exception as e:
             logger.exception(f"Error submitting run {run.id} to KFP")
@@ -359,7 +361,31 @@ class RunViewSet(
         if user.org is not None:
             qs = qs.filter(workflow__org=user.org)
         return qs
+    def retrieve(self, request, *args, **kwargs):
+        run = self.get_object()
 
+        # 1) Pull live .state from KFP
+        try:
+            kfp = Client(
+                host=settings.KFP_API_URL,
+                existing_token=settings.KFP_AUTH_TOKEN
+            )
+            # v2 SDK returns V2beta1Run directly
+            kfp_run = kfp.get_run(run.kfp_run_id)
+            new_state = kfp_run.state.upper()
+        except Exception:
+            logger.exception("Failed to fetch KFP run %s", run.kfp_run_id)
+            new_state = run.status
+
+        # 2) If it’s changed—and hit a terminal state—update DB
+        if new_state != run.status:
+            run.status = new_state
+            if new_state in (Run.Status.SUCCEEDED, Run.Status.FAILED):
+                run.finished_at = timezone.now()
+            run.save(update_fields=['status', 'finished_at'])
+
+        # 3) Now return the usual serializer response
+        return super().retrieve(request, *args, **kwargs)
 
 class OrgTokenObtainPairView(TokenObtainPairView):
     serializer_class = OrgTokenObtainPairSerializer

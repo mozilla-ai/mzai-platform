@@ -44,6 +44,7 @@ class RunSerializer(serializers.ModelSerializer):
             'started_at',
             'finished_at',
             'yaml_snapshot_s3_key',
+            'run_url',
         ]
         read_only_fields = fields
 
