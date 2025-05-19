@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import action
+from rest_framework.reverse import reverse  
 
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 from drf_spectacular.types import OpenApiTypes
@@ -101,23 +102,15 @@ class WorkflowViewSet(
     mixins.RetrieveModelMixin,
     viewsets.GenericViewSet,
 ):
-    """
-    list/retrieve workflows in your org (super-admin sees all).
-    """
     queryset = Workflow.objects.all()
     serializer_class = WorkflowSerializer
     permission_classes = [IsActivePermission]
 
-
-    @extend_schema(
-        request=WorkflowSerializer,
-        responses={200: OpenApiResponse(description="Returns parsed workflow JSON")}
-    )
     @action(detail=False, methods=['post'], url_path='generate')
     def generate(self, request):
         """
-        Create a Workflow, synchronously call Workflow Composer API to get YAML,
-        save it to storage, parse to JSON, and return JSON to client.
+        Create a Workflow in PENDING state, synchronously call Composer,
+        save the YAML, mark READY (or FAILED), then redirect to details.
         """
         if request.user.org is None:
             return Response(
@@ -128,83 +121,29 @@ class WorkflowViewSet(
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        # Create workflow record in PENDING state
         workflow = serializer.save(
             org=request.user.org,
             status=Workflow.Status.PENDING
         )
 
-        payload = {"prompt": workflow.prompt}
-
         try:
-            # Call Workflow Composer synchronously
             resp = requests.post(
                 settings.WORKFLOW_COMPOSER_URL,
-                params=payload,
+                params={'prompt': workflow.prompt},
                 timeout=30
             )
             resp.raise_for_status()
             yaml_str = resp.text
 
-            # Save YAML to storage (e.g., S3)
             key = f'mzai-platform-workflows/{workflow.id}.yaml'
             default_storage.save(key, ContentFile(yaml_str.encode('utf-8')))
 
-            # Update workflow status and S3 key
             workflow.yaml_s3_key = key
             workflow.status = Workflow.Status.READY
             workflow.save(update_fields=['yaml_s3_key', 'status'])
 
-            # Parse the YAML into a dict
-            spec = yaml.safe_load(yaml_str)
-
-            # Build executorLabel → image mapping
-            executors = spec.get('deploymentSpec', {}).get('executors', {})
-            executor_images = {
-                label: exec_def.get('container', {}).get('image')
-                for label, exec_def in executors.items()
-            }
-
-            # Transform the raw pipeline YAML dict into the desired JSON schema
-            result = {
-                'workflowId': workflow.id, #TODO change to UUID and add result to the run when it's completed. 
-                'description': spec.get('pipelineInfo', {}).get('description', ''),
-                'steps': []
-            }
-            tasks = spec.get('root', {}).get('dag', {}).get('tasks', {})
-            components = spec.get('components', {})
-
-            for task_name, task_def in tasks.items():
-                comp_ref = task_def.get('componentRef', {}).get('name')
-
-                # Lookup executor label & image
-                executor_label = components.get(comp_ref, {}).get('executorLabel')
-                image = executor_images.get(executor_label)
-
-                step = {
-                    'id': task_name, 
-                    'description': get_component_description(comp_ref),
-                    'inputs': [],
-                    'image': image
-                }
-
-                # Map each input, adding required/default metadata
-                # only show parameters, not artifacts
-                for key in task_def.get('inputs', {}).get('parameters', {}):
-                    meta = get_input_metadata(comp_ref, key)
-                    inp = {
-                        'name': key,
-                        'type': 'string',
-                        **meta
-                    }
-                    step['inputs'].append(inp)
-
-
-                result['steps'].append(step)
-
-            data = result
-
         except requests.RequestException as e:
+            # mark FAILED on network/HTTP errors
             workflow.status = Workflow.Status.FAILED
             workflow.save(update_fields=['status'])
             return Response(
@@ -212,6 +151,7 @@ class WorkflowViewSet(
                 status=status.HTTP_502_BAD_GATEWAY
             )
         except Exception as e:
+            # mark FAILED on any parsing/storage error
             workflow.status = Workflow.Status.FAILED
             workflow.save(update_fields=['status'])
             return Response(
@@ -219,8 +159,76 @@ class WorkflowViewSet(
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-        return Response(data, status=status.HTTP_200_OK)
+        details_url = reverse(
+            'workflows-details',        
+            kwargs={'pk': workflow.id},
+            request=request
+        )
 
+        return Response(status=status.HTTP_303_SEE_OTHER, headers={'Location': details_url})
+
+    @action(detail=True, methods=['get'], url_path='details')
+    def details(self, request, pk=None):
+        """
+        If READY, load & parse the stored YAML and return JSON.
+        Otherwise tell client to wait.
+        """
+        workflow = self.get_object()
+
+        if workflow.status != Workflow.Status.READY:
+            return Response(
+                {'detail': 'Workflow not ready yet.'},
+                status=status.HTTP_200_OK
+            )
+
+        # Load YAML from storage
+        try:
+            raw = default_storage.open(workflow.yaml_s3_key).read().decode('utf-8')
+            spec = yaml.safe_load(raw)
+        except Exception as e:
+            return Response(
+                {'detail': f'Error loading workflow spec: {e}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        executors = spec.get('deploymentSpec', {}).get('executors', {})
+        executor_images = {
+            label: defs.get('container', {}).get('image')
+            for label, defs in executors.items()
+        }
+
+        result = {
+            'workflowId': workflow.id,
+            'description': spec.get('pipelineInfo', {}).get('description', ''),
+            'steps': []
+        }
+
+        tasks = spec.get('root', {}).get('dag', {}).get('tasks', {})
+        components = spec.get('components', {})
+
+        for name, task in tasks.items():
+            comp = task.get('componentRef', {}).get('name')
+            executor_label = components.get(comp, {}).get('executorLabel')
+            image = executor_images.get(executor_label)
+
+            step = {
+                'id': name,
+                'description': get_component_description(comp),
+                'inputs': [],
+                'image': image
+            }
+
+            for param in task.get('inputs', {}).get('parameters', {}):
+                meta = get_input_metadata(comp, param)
+                step['inputs'].append({
+                    'name': param,
+                    'type': 'string',
+                    **meta
+                })
+
+            result['steps'].append(step)
+
+        return Response(result, status=status.HTTP_200_OK)
 
     @extend_schema(
         request=OpenApiTypes.OBJECT,
