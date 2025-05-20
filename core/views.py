@@ -167,21 +167,31 @@ class WorkflowViewSet(
 
         return Response(status=status.HTTP_303_SEE_OTHER, headers={'Location': details_url})
 
-    @action(detail=True, methods=['get'], url_path='details')
-    def details(self, request, pk=None):
+    def retrieve(self, request, pk=None):
         """
-        If READY, load & parse the stored YAML and return JSON.
-        Otherwise tell client to wait.
+        Returns:
+        {
+            <all WorkflowSerializer fields...>,
+            "json": {
+                "workflowId": ...,
+                "description": ...,
+                "steps": [ ... ]
+            }
+        }
         """
         workflow = self.get_object()
+        # 1. serialize all the metadata
+        meta_serializer = self.get_serializer(workflow)
+        metadata = meta_serializer.data
 
+        # 2. if not ready, short-circuit
         if workflow.status != Workflow.Status.READY:
             return Response(
                 {'detail': 'Workflow not ready yet.'},
                 status=status.HTTP_200_OK
             )
 
-        # Load YAML from storage
+        # 3. load & parse YAML just like before
         try:
             raw = default_storage.open(workflow.yaml_s3_key).read().decode('utf-8')
             spec = yaml.safe_load(raw)
@@ -197,7 +207,8 @@ class WorkflowViewSet(
             for label, defs in executors.items()
         }
 
-        result = {
+        # 4. build the “inner” JSON exactly as before
+        inner = {
             'workflowId': workflow.id,
             'description': spec.get('pipelineInfo', {}).get('description', ''),
             'steps': []
@@ -207,28 +218,34 @@ class WorkflowViewSet(
         components = spec.get('components', {})
 
         for name, task in tasks.items():
-            comp = task.get('componentRef', {}).get('name')
-            executor_label = components.get(comp, {}).get('executorLabel')
+            comp_name = task.get('componentRef', {}).get('name')
+            executor_label = components.get(comp_name, {}).get('executorLabel')
             image = executor_images.get(executor_label)
 
             step = {
                 'id': name,
-                'description': get_component_description(comp),
+                'description': get_component_description(comp_name),
                 'inputs': [],
                 'image': image
             }
 
             for param in task.get('inputs', {}).get('parameters', {}):
-                meta = get_input_metadata(comp, param)
+                meta = get_input_metadata(comp_name, param)
                 step['inputs'].append({
                     'name': param,
                     'type': 'string',
                     **meta
                 })
 
-            result['steps'].append(step)
+            inner['steps'].append(step)
 
-        return Response(result, status=status.HTTP_200_OK)
+        # 5. wrap it all together under the "json" key
+        envelope = {
+            **metadata,
+            'json': inner
+        }
+
+        return Response(envelope, status=status.HTTP_200_OK)
 
     @extend_schema(
         request=OpenApiTypes.OBJECT,
