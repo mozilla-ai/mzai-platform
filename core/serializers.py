@@ -5,7 +5,7 @@ from core.models import Workflow, Run
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 class WorkflowSerializer(serializers.ModelSerializer):
-    # only accept `prompt` on input, never return it
+
     # only return the S3 key, never accept it on input
     yaml_s3_key = serializers.CharField(read_only=True)
 
