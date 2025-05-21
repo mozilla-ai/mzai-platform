@@ -160,7 +160,7 @@ class WorkflowViewSet(
             )
 
         details_url = reverse(
-            'workflows-details',        
+            'workflows-detail',        
             kwargs={'pk': workflow.id},
             request=request
         )
