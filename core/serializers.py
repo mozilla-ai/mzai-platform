@@ -30,13 +30,13 @@ class WorkflowSerializer(serializers.ModelSerializer):
         ]
         
 class RunSerializer(serializers.ModelSerializer):
-    # If you want the workflow ID in the output:
-    workflow_id = serializers.UUIDField(source='workflow.id', read_only=True)
+    workflow_id     = serializers.UUIDField(source='workflow.id', read_only=True)
+    artifact_url    = serializers.SerializerMethodField()
 
     class Meta:
-        model = Run
-        fields = [
-            'id',
+        model           = Run
+        fields          = [
+            'id', 
             'workflow_id',
             'kfp_run_id',
             'status',
@@ -44,8 +44,13 @@ class RunSerializer(serializers.ModelSerializer):
             'finished_at',
             'yaml_snapshot_s3_key',
             'run_url',
+            'artifact_s3_key',
+            'artifact_url'
         ]
-        read_only_fields = fields
+        read_only_fields= fields
+
+    def get_artifact_url(self, obj: Run) -> str | None:
+        return obj.get_assigned_artifact_url()
 
 class OrgTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod

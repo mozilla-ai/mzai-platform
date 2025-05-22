@@ -179,6 +179,7 @@ AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
 # External Service Tokens
 KFP_API_URL     = os.getenv('KFP_API_URL')
 KFP_AUTH_TOKEN  = os.getenv('KFP_AUTH_TOKEN')
+KFP_UI_URL = os.getenv('KFP_UI_URL', KFP_API_URL)
 WORKFLOW_COMPOSER_URL    = os.getenv('WORKFLOW_COMPOSER_URL')
 CALLBACK_BASE_URL = os.getenv('CALLBACK_BASE_URL')
 # Default primary key field type
