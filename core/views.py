@@ -407,7 +407,15 @@ class RunViewSet(
             run.status = new_state
             if new_state in (Run.Status.SUCCEEDED, Run.Status.FAILED):
                 run.finished_at = timezone.now()
-            run.save(update_fields=['status', 'finished_at'])
+            run.save(update_fields=["status", "finished_at"])
+
+            # ← NEW: if we just hit SUCCEEDED, fetch & archive the artifact
+            if new_state == Run.Status.SUCCEEDED and not run.artifact_s3_key:
+                try:
+                    logger.info("Fetching artifact for run %s", run.id)
+                    run.fetch_and_archive_artifact()
+                except Exception as e:
+                    logger.exception("Failed to fetch/archive artifact for run %s", run.id)
 
         # 3) Now return the usual serializer response
         return super().retrieve(request, *args, **kwargs)

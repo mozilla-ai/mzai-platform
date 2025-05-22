@@ -1,0 +1,11 @@
+services:
+  web:
+    build: .
+    ports:
+      - "${COMPOSER_DEBUG_PORT}:${COMPOSER_DEBUG_PORT}"
+    volumes:
+      - .:/app
+    environment:
+      - COMPOSER_APP_ENV=development
+      - COMPOSER_DEBUG_PORT
+      - PYTHONPATH=/app
