@@ -48,7 +48,7 @@ oauthlib==3.2.2
 packaging==25.0
 prompt_toolkit==3.0.51
 proto-plus==1.26.1
-protobuf==4.25.7
+protobuf==4.25.8
 psycopg2-binary==2.9.10
 pyasn1==0.6.1
 pyasn1_modules==0.4.2
