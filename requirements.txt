@@ -20,7 +20,7 @@ django-cors-headers==4.7.0
 django-rest-authtoken==2.1.4
 django-storages==1.14.6
 djangorestframework==3.16.0
-djangorestframework_simplejwt==5.5.0
+djangorestframework_simplejwt==5.5.1
 docstring_parser==0.16
 drf-spectacular==0.28.0
 drf-spectacular-sidecar==2025.4.1
